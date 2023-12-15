@@ -4,53 +4,69 @@
 -- Documentation :
 -- https://hackage.haskell.org/package/gi-gtk
 
-import Data.Text ()
 
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad
+import Data.Text (Text, singleton)
+import Data.Maybe (fromMaybe)
+import Data.Int (Int32)
 
 import qualified GI.Gio as Gio
 import qualified GI.Gtk as Gtk
-import Data.GI.Base
+import Data.GI.Base (new, AttrOp((:=)), after, on)
 
-import Data.Int (Int32)
+type CharLayout = [[Text]]
+type ButtonLayout = [[Gtk.Button]]
 
-printHello :: IO ()
-printHello = putStrLn "Hello, World!"
+qwertyLayout :: CharLayout
+qwertyLayout = map (map singleton)
+    [['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+     ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';'],
+     ['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.']
+    ]
 
-getLines :: (Eq a, Num a) => a -> [IO Gtk.Box]
-getLines 0 = []
-getLines lineWidth = line : (getLines $ lineWidth - 1)
-  where line = new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
+printLabel :: Gtk.Button -> IO ()
+printLabel b = do
+    label <- Gtk.buttonGetLabel b
+    print $ fromMaybe "Missing label" label
 
-listLines :: IO [Gtk.Box]
-listLines = sequence $ getLines 2
+listLines :: Int -> IO [Gtk.Box]
+listLines n = sequence $ replicate n $ new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
 
-appendTo :: Gtk.Box -> Gtk.Box -> IO ()
+listButtons :: Int -> IO [Gtk.Button]
+listButtons n = sequence $ replicate n $ new Gtk.Button []
+
+initButton :: Gtk.Button -> Text -> IO ()
+initButton button label = do
+    after button #clicked $ printLabel button
+    Gtk.buttonSetLabel button label
+
+labelsToButtons :: [Text] -> [Gtk.Button] -> IO ()
+labelsToButtons labels buttons = sequence_ $ zipWith initButton buttons labels
+
+appendTo :: Gtk.IsWidget w => Gtk.Box -> w -> IO ()
 appendTo = Gtk.boxAppend
 
-appendAllTo :: Gtk.Box -> [Gtk.Box] -> IO ()
-appendAllTo layout ws = sequence_ $ map (appendTo layout) ws
+appendAllTo :: Gtk.IsWidget w => Gtk.Box -> [w] -> IO ()
+appendAllTo keyboard ws = sequence_ $ map (appendTo keyboard) ws
+
+applyLayout :: CharLayout -> IO ButtonLayout
+applyLayout = sequence . map (\l -> listButtons $ length l) 
 
 activateApp :: Gtk.Application -> IO ()
 activateApp app = do
-  layout <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
-  lines <- listLines
-  appendAllTo layout lines
+  keyboard <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
+  lines <- listLines (length qwertyLayout)
+  letters' <- applyLayout qwertyLayout
+  sequence_ $ map (uncurry labelsToButtons) $ zip qwertyLayout letters'
 
-  letter1 <- new Gtk.Button [#label := "Hello World1!"]
-  letter2 <- new Gtk.Button [#label := "Hello World2!"]
-  -- Gtk.boxAppend firstLine letter
-  Gtk.boxAppend (lines !! 0) letter1
-  Gtk.boxAppend (lines !! 1) letter2
-  on letter1 #clicked printHello
-  on letter2 #clicked printHello
+  appendAllTo keyboard lines
+  sequence_ $ map (uncurry appendAllTo) $ zip lines letters'
 
   w <- new Gtk.ApplicationWindow [ #application := app
                                  , #title := "Virtual Keyboard"
                                  , #defaultHeight := 400
                                  , #defaultWidth := 1000
-                                 , #child := layout
+                                 , #child := keyboard
                                  ]
   #show w
 
