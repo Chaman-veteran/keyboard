@@ -22,6 +22,7 @@ import Data.Int (Int32)
 import Data.Aeson (Array, Value(Object, String, Array), decode)
 import Data.Vector (Vector)
 import Data.Aeson.KeyMap (Key)
+import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
 import qualified Data.Text as T (head)
 import qualified Data.Vector as V
 import qualified Data.Aeson.KeyMap as KM ((!?))
@@ -32,26 +33,27 @@ import qualified GI.Gio as Gio
 import qualified GI.Gtk as Gtk
 import Data.GI.Base (new, AttrOp((:=)), after, on)
 
-import System.IO (hPutChar, openTempFile, BufferMode(NoBuffering))
-import System.IO.Temp (getCanonicalTemporaryDirectory)
-import GHC.IO.Handle (Handle, hSetBuffering)
+-- import Control.Monad.Trans.Reader
 
 type TextLayout = V.Vector (V.Vector Text)
 type ButtonLayout = V.Vector (V.Vector Gtk.Button)
+type Pipe = IORef String
+-- type RIORef = ReaderT (IORef String) IO (IO String)
 
-tempFile :: IO (Handle)
-tempFile = do
-  tempDir <- getCanonicalTemporaryDirectory
-  hdl <- snd <$> openTempFile tempDir "keyboard"
-  hSetBuffering hdl NoBuffering
-  return hdl
+-- readPipe :: RIORef
+-- readPipe = do
+--   pipe <- asks readIORef
+--   return pipe
 
-printLabel :: Handle -> Button -> IO ()
-printLabel hdl b = do
+printLabel :: IO (Pipe) -> Button -> IO ()
+printLabel pipe b = do
     label <- Gtk.buttonGetLabel b
+    refPipe <- pipe
     case label of
       Nothing -> return ()
-      Just c -> hPutChar hdl $ T.head c
+      Just c -> modifyIORef' refPipe (\s -> T.head c : s)
+    s <- readIORef refPipe
+    print s
     print $ fromMaybe "Missing label" label
 
 -- | Extracts the text value out of a json
@@ -71,13 +73,13 @@ listLines n = sequence $ V.replicate n $ new Gtk.Box [#orientation := Gtk.Orient
 listButtons :: Int -> IO (Vector Button)
 listButtons n = sequence $ V.replicate n $ new Gtk.Button []
 
-initButton :: Handle -> Button -> Text -> IO ()
-initButton hdl button label = do
-    after button #clicked $ printLabel hdl button
-    Gtk.buttonSetLabel button label
+initButton :: IO (Pipe) -> Button -> Text -> IO ()
+initButton pipe b label = do
+    after b #clicked $ printLabel pipe b
+    Gtk.buttonSetLabel b label
 
-labelsToButtons :: Handle -> Vector Text -> Vector Button -> IO ()
-labelsToButtons hdl labels buttons = sequence_ $ V.zipWith (initButton hdl) buttons labels
+labelsToButtons :: IO (Pipe) -> Vector Text -> Vector Button -> IO ()
+labelsToButtons pipe labels bs = sequence_ $ V.zipWith (initButton pipe) bs labels
 
 appendTo :: IsWidget w => Box -> w -> IO ()
 appendTo = Gtk.boxAppend
@@ -88,13 +90,13 @@ appendAllTo keyboard ws = sequence_ $ V.map (appendTo keyboard) ws
 applyLayout :: TextLayout -> IO ButtonLayout
 applyLayout = sequence . V.map (\l -> listButtons $ V.length l) 
 
-activateApp :: Application -> Handle -> IO ()
-activateApp app hdl = do
+activateApp :: IO (Pipe) -> Application -> IO ()
+activateApp pipe app = do
   keyboard <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   chosenLayout <- qwertyLayout
   lines <- listLines (length chosenLayout)
   letters <- applyLayout $ chosenLayout
-  sequence_ $ V.map (uncurry $ labelsToButtons hdl) $ V.zip chosenLayout letters
+  sequence_ $ V.map (uncurry $ labelsToButtons pipe) $ V.zip chosenLayout letters
 
   appendAllTo keyboard lines
   sequence_ $ V.map (uncurry appendAllTo) $ V.zip lines letters
@@ -107,10 +109,10 @@ activateApp app hdl = do
 
 main :: IO ()
 main = do
+  let pipe = newIORef "" -- Pipe Keyboard <-> Spell checker
   app <- new Gtk.Application [ #applicationId := "virtual-keyboard.example"
                              , #flags := [ Gio.ApplicationFlagsFlagsNone ]
                              ]
-  keyboardToSpellCheckerHdl <- tempFile
-  on app #activate $ activateApp app keyboardToSpellCheckerHdl
+  on app #activate $ activateApp pipe app
   Gio.applicationRun app Nothing
   return ()
