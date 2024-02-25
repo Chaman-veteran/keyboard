@@ -33,26 +33,17 @@ import qualified GI.Gio as Gio
 import qualified GI.Gtk as Gtk
 import Data.GI.Base (new, AttrOp((:=)), after, on)
 
--- import Control.Monad.Trans.Reader
-
 type TextLayout = V.Vector (V.Vector Text)
 type ButtonLayout = V.Vector (V.Vector Gtk.Button)
 type Pipe = IORef String
--- type RIORef = ReaderT (IORef String) IO (IO String)
 
--- readPipe :: RIORef
--- readPipe = do
---   pipe <- asks readIORef
---   return pipe
-
-printLabel :: IO (Pipe) -> Button -> IO ()
+printLabel :: Pipe -> Button -> IO ()
 printLabel pipe b = do
     label <- Gtk.buttonGetLabel b
-    refPipe <- pipe
     case label of
       Nothing -> return ()
-      Just c -> modifyIORef' refPipe (\s -> T.head c : s)
-    s <- readIORef refPipe
+      Just c -> modifyIORef' pipe (\s -> T.head c : s)
+    s <- readIORef pipe
     print s
     print $ fromMaybe "Missing label" label
 
@@ -73,12 +64,12 @@ listLines n = sequence $ V.replicate n $ new Gtk.Box [#orientation := Gtk.Orient
 listButtons :: Int -> IO (Vector Button)
 listButtons n = sequence $ V.replicate n $ new Gtk.Button []
 
-initButton :: IO (Pipe) -> Button -> Text -> IO ()
+initButton :: Pipe -> Button -> Text -> IO ()
 initButton pipe b label = do
     after b #clicked $ printLabel pipe b
     Gtk.buttonSetLabel b label
 
-labelsToButtons :: IO (Pipe) -> Vector Text -> Vector Button -> IO ()
+labelsToButtons :: Pipe -> Vector Text -> Vector Button -> IO ()
 labelsToButtons pipe labels bs = sequence_ $ V.zipWith (initButton pipe) bs labels
 
 appendTo :: IsWidget w => Box -> w -> IO ()
@@ -90,7 +81,7 @@ appendAllTo keyboard ws = sequence_ $ V.map (appendTo keyboard) ws
 applyLayout :: TextLayout -> IO ButtonLayout
 applyLayout = sequence . V.map (\l -> listButtons $ V.length l) 
 
-activateApp :: IO (Pipe) -> Application -> IO ()
+activateApp :: Pipe -> Application -> IO ()
 activateApp pipe app = do
   keyboard <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   chosenLayout <- qwertyLayout
@@ -109,7 +100,7 @@ activateApp pipe app = do
 
 main :: IO ()
 main = do
-  let pipe = newIORef "" -- Pipe Keyboard <-> Spell checker
+  pipe <- newIORef "" -- Pipe Keyboard <-> Spell checker
   app <- new Gtk.Application [ #applicationId := "virtual-keyboard.example"
                              , #flags := [ Gio.ApplicationFlagsFlagsNone ]
                              ]
