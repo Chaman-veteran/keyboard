@@ -37,6 +37,7 @@ type TextLayout = V.Vector (V.Vector Text)
 type ButtonLayout = V.Vector (V.Vector Gtk.Button)
 type Pipe = IORef String
 
+-- | Prints hitted button to stdout
 printLabel :: Pipe -> Button -> IO ()
 printLabel pipe b = do
     label <- Gtk.buttonGetLabel b
@@ -51,6 +52,7 @@ printLabel pipe b = do
 getFromJSON :: Key -> Value -> Text
 getFromJSON key (Object o) = (\(String s) -> s) . fromJust $ o KM.!? key
 
+-- | Fetches and maps the qwerty layout as a matrix (TextLayout)
 qwertyLayout :: IO TextLayout
 qwertyLayout = do
   layoutB <- B.readFile "layouts/qwerty.json"
@@ -58,39 +60,43 @@ qwertyLayout = do
   let fromJSON = V.map (\(Array v) -> V.map (getFromJSON "label") v) layoutArray
   return fromJSON
 
-listLines :: Int -> IO (Vector Box)
-listLines n = sequence $ V.replicate n $ new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
+-- | Adds n rows to the GUI's window
+listRows :: Int -> IO (Vector Box)
+listRows n = sequence $ V.replicate n $ new Gtk.Box [#orientation := Gtk.OrientationHorizontal]
 
+-- | Adds buttons to the GUI's window (applies to the previously created row)
 listButtons :: Int -> IO (Vector Button)
 listButtons n = sequence $ V.replicate n $ new Gtk.Button []
 
+-- | Links a button to the associated label
 initButton :: Pipe -> Button -> Text -> IO ()
 initButton pipe b label = do
     after b #clicked $ printLabel pipe b
     Gtk.buttonSetLabel b label
 
+-- | Associates labels and buttons together
 labelsToButtons :: Pipe -> Vector Text -> Vector Button -> IO ()
 labelsToButtons pipe labels bs = sequence_ $ V.zipWith (initButton pipe) bs labels
 
-appendTo :: IsWidget w => Box -> w -> IO ()
-appendTo = Gtk.boxAppend
+-- | Draws (appends) a list of widgets to the keyboard 
+drawOn :: IsWidget w => Box -> Vector w -> IO ()
+drawOn keyboard ws = sequence_ $ V.map (Gtk.boxAppend keyboard) ws
 
-appendAllTo :: IsWidget w => Box -> Vector w -> IO ()
-appendAllTo keyboard ws = sequence_ $ V.map (appendTo keyboard) ws
-
+-- | Transforms a matrix of labels into a matrix of GUI buttons
 applyLayout :: TextLayout -> IO ButtonLayout
 applyLayout = sequence . V.map (\l -> listButtons $ V.length l) 
 
+-- | Draws the app GUI
 activateApp :: Pipe -> Application -> IO ()
 activateApp pipe app = do
   keyboard <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   chosenLayout <- qwertyLayout
-  lines <- listLines (length chosenLayout)
+  lines <- listRows (length chosenLayout)
   letters <- applyLayout $ chosenLayout
   sequence_ $ V.map (uncurry $ labelsToButtons pipe) $ V.zip chosenLayout letters
 
-  appendAllTo keyboard lines
-  sequence_ $ V.map (uncurry appendAllTo) $ V.zip lines letters
+  drawOn keyboard lines
+  sequence_ $ V.map (uncurry drawOn) $ V.zip lines letters
 
   w <- new Gtk.ApplicationWindow [ #application := app
                                  , #title := "Virtual Keyboard"
