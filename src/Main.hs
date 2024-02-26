@@ -66,7 +66,7 @@ getFromJSON key (Object o) = (\(String s) -> s) . fromJust $ o KM.!? key
 -- | Fetches and maps the qwerty layout as a matrix (TextLayout)
 qwertyLayout :: IO TextLayout
 qwertyLayout = do
-  layoutB <- B.readFile "layouts/qwerty.json"
+  layoutB <- B.readFile "spell-checker/layouts/qwerty.json"
   let layoutArray = fromJust (decode layoutB :: Maybe Array)
   let fromJSON = V.map (\(Array v) -> V.map (getFromJSON "label") v) layoutArray
   return fromJSON
