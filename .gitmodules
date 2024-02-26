@@ -1,0 +1,3 @@
+[submodule "spell-checker"]
+	path = spell-checker
+	url = https://github.com/Chaman-veteran/spell-checker
