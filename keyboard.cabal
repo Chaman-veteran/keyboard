@@ -37,7 +37,7 @@ executable keyboard
         text        ^>= 2.1,
         gi-gio      ^>= 2.0.32,
         haskell-gi-base ^>= 0.26.4,
-        bytestring  ^>= 0.11.5.2,
+        bytestring  ^>= 0.12.1.0,
         vector      ^>= 0.13.1.0,
         aeson       ^>= 2.2.1.0
 
