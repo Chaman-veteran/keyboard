@@ -14,17 +14,14 @@
 -- https://hackage.haskell.org/package/gi-gtk
 
 
-import Control.Monad (join)
-import Control.Monad.IO.Class (MonadIO)
-import Data.Text (Text, singleton, pack)
+import Data.Text (Text, pack)
 import Data.Maybe (fromMaybe, fromJust)
-import Data.Int (Int32)
 import Data.Aeson (Array, Value(Object, String, Array), decode)
 import Data.Vector (Vector)
 import Data.Aeson.KeyMap (Key)
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef', writeIORef)
 import qualified Data.Text as T (head)
-import qualified Data.Vector as V
+import qualified Data.Vector as V (replicate, map, zipWith, length, singleton, zip)
 import qualified Data.Aeson.KeyMap as KM ((!?))
 import qualified Data.ByteString.Lazy as B (readFile)
 
@@ -35,19 +32,18 @@ import Data.GI.Base (new, AttrOp((:=)), after, on)
 
 import SpellCheckerInterface (completeWord, correctWord)
 
-type TextLayout = V.Vector (V.Vector Text)
-type ButtonLayout = V.Vector (V.Vector Gtk.Button)
+type TextLayout = Vector (Vector Text)
+type ButtonLayout = Vector (Vector Gtk.Button)
 type Pipe = IORef String
 
 -- | Prints hitted button to stdout
-printLabel :: (Pipe, Button) -> Button -> IO ()
-printLabel (pipe, ks) b = do
+sendToPipe :: (Pipe, Button) -> Button -> IO ()
+sendToPipe (pipe, ks) b = do
     label <- Gtk.buttonGetLabel b
     case label of
       Nothing -> return ()
       Just c -> modifyIORef' pipe (\s -> T.head c : s)
     refreshOutput pipe ks
-    print $ fromMaybe "Missing label" label
 
 -- | Clears the pipe for keyboard's output
 clearPipe :: IORef String -> Button -> IO ()
@@ -84,7 +80,7 @@ listButtons n = sequence $ V.replicate n $ new Gtk.Button []
 -- | Links a button to the associated label
 initButton :: (Pipe, Button) -> Button -> Text -> IO ()
 initButton pipe b label = do
-    after b #clicked $ printLabel pipe b
+    after b #clicked $ sendToPipe pipe b
     Gtk.buttonSetLabel b label
 
 -- | Associates labels and buttons together
