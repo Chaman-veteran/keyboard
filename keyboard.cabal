@@ -32,6 +32,7 @@ executable keyboard
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
     build-depends:
+        spell-checker:spell-checker-interface,
         base        ^>= 4.19.0.0,
         gi-gtk	    ^>= 4.0.8,
         text        ^>= 2.1,

@@ -33,6 +33,8 @@ import qualified GI.Gio as Gio
 import qualified GI.Gtk as Gtk
 import Data.GI.Base (new, AttrOp((:=)), after, on)
 
+import SpellCheckerInterface (completeWord, correctWord)
+
 type TextLayout = V.Vector (V.Vector Text)
 type ButtonLayout = V.Vector (V.Vector Gtk.Button)
 type Pipe = IORef String
