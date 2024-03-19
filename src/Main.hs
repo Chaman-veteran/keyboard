@@ -15,7 +15,7 @@
 
 
 import Data.Text (Text, pack)
-import Data.Maybe (fromMaybe, fromJust)
+import Data.Maybe (fromMaybe, fromJust, listToMaybe)
 import Data.Aeson (Array, Value(Object, String, Array), decode)
 import Data.Vector (Vector)
 import Data.Aeson.KeyMap (Key)
@@ -25,37 +25,43 @@ import qualified Data.Vector as V (replicate, map, zipWith, length, singleton, z
 import qualified Data.Aeson.KeyMap as KM ((!?))
 import qualified Data.ByteString.Lazy as B (readFile)
 
+import Codec.Serialise (readFileDeserialise)
+
 import GI.Gtk (Button, Box, IsWidget, Application)
 import qualified GI.Gio as Gio
 import qualified GI.Gtk as Gtk
 import Data.GI.Base (new, AttrOp((:=)), after, on)
 
 import SpellCheckerInterface (completeWord, correctWord)
+import Data.WordTree (fromMap, CountedWord(word), Tree)
 
 type TextLayout = Vector (Vector Text)
 type ButtonLayout = Vector (Vector Gtk.Button)
 type Pipe = IORef String
+-- ^ IORef (Keyboard -> Spell-checker)
+
+-- | Refreshs the keyboard's suggestion output 
+refreshOutput :: (Pipe, Tree Char) -> Button -> IO ()
+refreshOutput (pipe, dict) ks = do
+  pipeOutput <- reverse <$> readIORef pipe
+  let suggestion = listToMaybe $ map word $ completeWord dict pipeOutput
+  let keyboardOutput = pack $ fromMaybe pipeOutput suggestion
+  Gtk.buttonSetLabel ks $ keyboardOutput
 
 -- | Prints hitted button to stdout
-sendToPipe :: (Pipe, Button) -> Button -> IO ()
-sendToPipe (pipe, ks) b = do
+sendToPipe :: (Pipe, Tree Char, Button) -> Button -> IO ()
+sendToPipe (pipe, dict, ks) b = do
     label <- Gtk.buttonGetLabel b
     case label of
       Nothing -> return ()
-      Just c -> modifyIORef' pipe (\s -> T.head c : s)
-    refreshOutput pipe ks
+      Just c -> modifyIORef' pipe (T.head c :)
+    refreshOutput (pipe, dict) ks
 
 -- | Clears the pipe for keyboard's output
-clearPipe :: IORef String -> Button -> IO ()
+clearPipe :: Pipe -> Button -> IO ()
 clearPipe pipe ks = do
   writeIORef pipe ""
-  refreshOutput pipe ks
-
--- | Refreshs the keyboard's suggestion output 
-refreshOutput :: IORef String -> Button -> IO ()
-refreshOutput pipe ks = do
-  pipeOutput <- readIORef pipe
-  Gtk.buttonSetLabel ks $ (pack . reverse) pipeOutput
+  Gtk.buttonSetLabel ks $ (pack . reverse) ""
 
 -- | Extracts the text value out of a json
 getFromJSON :: Key -> Value -> Text
@@ -78,13 +84,13 @@ listButtons :: Int -> IO (Vector Button)
 listButtons n = sequence $ V.replicate n $ new Gtk.Button []
 
 -- | Links a button to the associated label
-initButton :: (Pipe, Button) -> Button -> Text -> IO ()
+initButton :: (Pipe, Tree Char, Button) -> Button -> Text -> IO ()
 initButton pipe b label = do
     after b #clicked $ sendToPipe pipe b
     Gtk.buttonSetLabel b label
 
 -- | Associates labels and buttons together
-labelsToButtons :: (Pipe, Button) -> Vector Text -> Vector Button -> IO ()
+labelsToButtons :: (Pipe, Tree Char, Button) -> Vector Text -> Vector Button -> IO ()
 labelsToButtons pipe labels bs = sequence_ $ V.zipWith (initButton pipe) bs labels
 
 -- | Draws (appends) a list of widgets to the keyboard 
@@ -96,8 +102,8 @@ applyLayout :: TextLayout -> IO ButtonLayout
 applyLayout = sequence . V.map (\l -> listButtons $ V.length l) 
 
 -- | Draws the app GUI
-activateApp :: Pipe -> Application -> IO ()
-activateApp pipe app = do
+activateApp :: Pipe -> Tree Char -> Application -> IO ()
+activateApp pipe dict app = do
   keyboard <- new Gtk.Box [#orientation := Gtk.OrientationVertical]
   
   keyboardSuggestion <- new Gtk.Button []
@@ -107,7 +113,7 @@ activateApp pipe app = do
   chosenLayout <- qwertyLayout
   lines <- listRows (length chosenLayout)
   letters <- applyLayout $ chosenLayout
-  sequence_ $ V.map (uncurry $ labelsToButtons (pipe, keyboardSuggestion)) $ V.zip chosenLayout letters
+  sequence_ $ V.map (uncurry $ labelsToButtons (pipe, dict, keyboardSuggestion)) $ V.zip chosenLayout letters
 
   drawOn keyboard lines
   sequence_ $ V.map (uncurry drawOn) $ V.zip lines letters
@@ -121,9 +127,11 @@ activateApp pipe app = do
 main :: IO ()
 main = do
   pipe <- newIORef "" -- Pipe Keyboard <-> Spell checker
+  inputFreq <- readFileDeserialise "spell-checker/SerializedStatistics/result" 
+  let dictionaryTree = fromMap inputFreq
   app <- new Gtk.Application [ #applicationId := "virtual-keyboard.example"
                              , #flags := [ Gio.ApplicationFlagsFlagsNone ]
                              ]
-  on app #activate $ activateApp pipe app
+  on app #activate $ activateApp pipe dictionaryTree app
   Gio.applicationRun app Nothing
   return ()
