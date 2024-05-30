@@ -6,3 +6,10 @@
 ```
 cabal run keyboard
 ```
+
+# Using the build environment
+If you prefer to use a (podman) container to build the keyboard, you can do so with :
+```
+podman build . -f build-env/Containerfile -t ghc
+podman run -it ghc
+```

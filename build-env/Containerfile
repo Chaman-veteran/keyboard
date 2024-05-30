@@ -1,0 +1,12 @@
+FROM docker.io/library/debian:stable-20240513
+
+RUN apt-get update; apt-get upgrade -y
+RUN apt-get install vim ghc cabal-install pkg-config libghc-zlib-dev & \
+    libgirepository1.0-dev libwebkit2gtk-4.0-dev libgtksourceview-3.0-dev -y
+RUN cabal update
+
+COPY spell-checker build-env/spell-checker.cabal /keyboard/spell-checker/
+COPY src /keyboard/src/
+COPY cabal.project build-env/keyboard.cabal /keyboard
+
+WORKDIR /keyboard
