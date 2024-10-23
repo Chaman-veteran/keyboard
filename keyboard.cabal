@@ -1,4 +1,4 @@
-cabal-version:      3.8
+cabal-version:      3.12
 name:               keyboard
 version:            0.1.0.0
 build-type: Simple
@@ -34,11 +34,11 @@ executable keyboard
     build-depends:
         spell-checker:spell-checker-lib,
         spell-checker:spell-checker-interface,
-        base        ^>= 4.19.1.0,
-        gi-gtk	    ^>= 4.0.8,
+        base        ^>= 4.20.0.0,
+        gi-gtk	    ^>= 4.0.9,
         text        ^>= 2.1.1,
-        gi-gio      ^>= 2.0.32,
-        haskell-gi-base ^>= 0.26.4,
+        gi-gio      ^>= 2.0.35,
+        haskell-gi-base ^>= 0.26.8,
         bytestring  ^>= 0.12.1.0,
         vector      ^>= 0.13.1.0,
         serialise   ^>= 0.2.6.1,

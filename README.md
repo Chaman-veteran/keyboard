@@ -3,6 +3,11 @@
 **ghc   9.8.2      base-4.19.1.0**
 
 ## To start the virtual keyboard using cabal
+First pull the spell-checker submodule with:
+```
+git submodule update --init --recursive
+```
+You can then start the keyboard with:
 ```
 cabal run keyboard
 ```
